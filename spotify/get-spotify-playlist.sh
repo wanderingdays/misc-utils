@@ -1,14 +1,36 @@
 #!/bin/bash
 
+set -e
+
+usage() {
+    echo "get-spotify-playlist.sh <playlist_path> <spotify_uri>"
+    exit 1 
+}
+
+if [ $# -ne 2 ]; then
+    usage
+fi
+
+path=$1
+pl_id=${2##*:}
+
 cred_file="credential.json"
 client_id=$(cat $cred_file |jq -r '.client_id')
 client_secret=$(cat $cred_file |jq -r '.client_secret')
 cred=$(echo -n "$client_id:$client_secret" | base64 -w 0)
-token=$(curl -v -s -X "POST" -H "Authorization: Basic $cred" -H "Accept: application/json" -d "grant_type=client_credentials" "https://accounts.spotify.com/api/token" 2>/dev/null | jq -r '.access_token')
+token=$(curl -s -X "POST" -H "Authorization: Basic $cred" -H "Accept: application/json" -d "grant_type=client_credentials" "https://accounts.spotify.com/api/token" 2>/dev/null | jq -r '.access_token')
 
-full=$(curl -v -H "Authorization: Bearer $token" https://api.spotify.com/v1/playlists/6EcUtQ0fz02ajr0E6ImMjP)
+full=$(curl -H "Authorization: Bearer $token" https://api.spotify.com/v1/playlists/$pl_id)
+pl_url=$(echo $full | jq -r '.external_urls.spotify')
 pl_name=$(echo $full | jq -r '.name')
 pl_img=$(echo $full | jq -r '.images[0].url')
+
+mkdir -p $path/$pl_name
+
+if [ -e $path/$pl_name/tracks.lst ]; then 
+    echo "clean up exisitng files under $path/$pl_name/"
+    rm -f $path/$pl_name/*
+fi
 
 jq -r '.tracks.items|keys[]' <<< "$full" | while read track_idx; do
     track=$(jq -r ".tracks.items[$track_idx].track" <<< "$full")
@@ -21,7 +43,7 @@ jq -r '.tracks.items|keys[]' <<< "$full" | while read track_idx; do
              artists="$artists, $(jq -r ".artists[$artist_idx].name" <<< "$track")"
 	 fi
     done
-    echo "%02d. %s - %s\n" $track_idx $artists $track_title >> $pl_name.lst)
+    printf "%02d. %s - %s\n" "$((track_idx+1))" "$artists" "$track_title" >> $path/$pl_name/tracks.lst)
 done
-#mkdir $name
-#curl -o ./$name/cover.jpg $imgurl
+
+curl -o $path/$pl_name/cover.jpg $pl_img
