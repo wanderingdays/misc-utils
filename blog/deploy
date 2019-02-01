@@ -1,0 +1,21 @@
+#!/bin/sh
+
+set -e
+
+usage() {
+    echo "deploy <path to blog>"
+    exit 1 
+}
+
+if [ $# -ne 1 ]; then
+    usage
+fi
+
+blogPATH=$1
+cd $blogPATH
+hugo
+
+gsutil -m rsync -R public gs://blog.wanderingdays.com/
+
+echo Deployment completed!
+
