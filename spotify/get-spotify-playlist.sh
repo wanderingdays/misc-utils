@@ -28,7 +28,7 @@ trap __cleanup EXIT
 #                          --- tracks.lst       # tracklist 
 
 usage() {
-    echo "get-spotify-playlist.sh <playlist_path> <spotify_uri>"
+    echo "get-spotify-playlist.sh <blog_path> <playlist_name>"
     exit 1 
 }
 
@@ -50,7 +50,12 @@ if [ $# -ne 2 ]; then
 fi
 
 path=${1%/}
-pl_id=${2##*:}
+pl_name=$2
+pls_file=$path/data/complete_playlists
+pl_id=$(cat $pls_file | jq -r --arg NAME "$pl_name" '.[] | select(.name==$NAME) | .id')
+if [ -z "$pl_id" ]; then
+    exit 1
+fi
 spotify_util_dir=$(dirname "$(which $0)")
 cred_file="$spotify_util_dir/credential.json"
 token_file="$spotify_util_dir/spotify_token"
@@ -94,7 +99,6 @@ get_playlist_detail() {
 # 2. get playlist detail
 get_playlist_detail -H "Authorization: Bearer $token" https://api.spotify.com/v1/playlists/$pl_id
 pl_url=$(echo $pl_detail| jq -r '.external_urls.spotify')
-pl_name=$(echo $pl_detail| jq -r '.name')
 pl_img=$(echo $pl_detail| jq -r '.images[0].url')
 pl_snapshot=$(echo $pl_detail| jq -r '.snapshot_id')
 
@@ -144,5 +148,3 @@ if [ ! -e $pl_path/tracks.lst ]; then
 		printf "%02d. %s - %s   \n" "$((track_idx+1))" "$artists" "$track_title" >> $pl_path/tracks.lst)
 	done
 fi
-
-echo $pl_name

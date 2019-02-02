@@ -3,22 +3,25 @@
 set -e
 
 usage() {
-    echo "newpost <path to blog> <playlist_type> <playlist URI>"
+    echo "newpost <path to blog> <playlist_type> <username> <playlist name>"
     exit 1 
 }
 
-if [ $# -ne 3 ]; then
+if [ $# -ne 4 ]; then
     usage
 fi
 
 blogPATH=$1
 postPATH="$blogPATH/content/posts"
 pl_type=$2
-uri=$3
+spotify_user=$3
+pl_name=$4
 cd $blogPATH
 
-pl_name=$(get-spotify-playlist.sh $blogPATH $uri)
-if [ $? -ne 0 -o -z $pl_name ]; then
+
+get-all-playlists.sh wanderingdays $blogPATH/data/complete_playlists
+get-spotify-playlist.sh $blogPATH $pl_name
+if [ $? -ne 0 ]; then
 	echo "get-spotify-playlist.sh failed"
 	exit 1
 fi
