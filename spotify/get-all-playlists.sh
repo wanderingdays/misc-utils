@@ -7,16 +7,17 @@ __cleanup()
     ARG=$?
 #    echo "clean up tmp files"
     rm -f /tmp/all_playlists*
+    rm -f /tmp/pl_json
     exit $ARG
 }
 trap __cleanup EXIT
 
 # when successful the following file will be created
-# static/playlists/complete_lists 
+# static/playlists/complete_lists
 
 usage() {
-    echo "get-all-playlists.sh"
-    exit 1 
+    echo "get-all-playlists.sh <output_filename>"
+    exit 1
 }
 
 get_cred() {
@@ -36,13 +37,13 @@ if [ $# -ne 1 ]; then
     usage
 fi
 
+pl_json=$1
 spotify_util_dir=$(dirname "$(which $0)")
 cred_file="$spotify_util_dir/credential.json"
 token_file="$spotify_util_dir/spotify_token"
-#pls_base="/tmp/all_playlists"
-pls_base="./all_playlists"
+pls_base="/tmp/all_playlists_"
 
-# 1.prepare token 
+# 1.prepare token
 #TODO: check out how to do refresh token, before that, we renew token if it is > 10mins
 if [ -e $token_file ]; then
 	toke_age=$((($(date +%s) - $(date -r ~/misc-utils/spotify/spotify_token +%s))))
@@ -74,8 +75,8 @@ get_all_playlists() {
     ) || rc="$?"
 
     if [ $status -ne 200 -o $rc -ne 0 ]; then
-	    echo "get all playlist failed status: $status rc: $rc"
-	    exit 1
+        echo "get all playlist failed status: $status rc: $rc"
+        exit 1
     fi
     pls_detail="$(cat $pls)"
 }
@@ -91,4 +92,28 @@ while [ ! -z "$req" -a "$req" != "null" ]; do
 done
 
 total=$(echo $pls_detail| jq -r '.total')
-echo $total
+i=0
+echo "[" > /tmp/pl_json 
+while [ -e $pls_base$i ]; do
+    pls_detail=$(cat $pls_base$i)
+    jq -r '.items|keys[]' <<< "$pls_detail" | (while read pl_idx; do
+        pl_owner=$(jq -r ".items[$pl_idx].owner.display_name" <<< "$pls_detail")
+        if [ "$pl_owner" = "wanderingdays" ]; then
+            pl_id=$(jq -r ".items[$pl_idx].id" <<< "$pls_detail")
+            pl_name=$(jq -r ".items[$pl_idx].name" <<< "$pls_detail")
+            pl_ver=$(jq -r ".items[$pl_idx].snapshot_id" <<< "$pls_detail")
+            if [ -z "$entry" ]; then
+                if [ "$i" -ge "1" ]; then
+                    echo "," >> /tmp/pl_json 
+                fi
+                entry="{\"name\":\"$pl_name\", \"id\":\"$pl_id\", \"version\":\"$pl_ver\"}"
+            else
+                entry=$entry,"{\"name\":\"$pl_name\", \"id\":\"$pl_id\", \"version\":\"$pl_ver\"}"
+            fi
+        fi
+    done
+    echo $entry >> /tmp/pl_json) 
+    i=$((i+1))
+done
+echo "]" >> /tmp/pl_json 
+jq . /tmp/pl_json > $pl_json 
