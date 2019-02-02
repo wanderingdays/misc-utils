@@ -4,7 +4,7 @@ set -e
 
 usage() {
     echo "add_tags <path to post> <key> <tag1> [tag2]..."
-    exit 1 
+    exit 1
 }
 
 if [ $# -le 2 ]; then
@@ -20,19 +20,17 @@ if [ ! -e $post ]; then
 fi
 
 cur_entries=$(cat $post |grep $key)
-cur_entries=$"{cur_entries#*[}"
-cur_entries=$"{cur_entries%]*}"
+cur_entries=$(echo $cur_entries | sed 's/.*\[\([^]]*\)\].*/\1/g')
 new_entries=$cur_entries
 for i in "$@"; do
-	echo $new_entries
-	if [ -z $new_entries ]; then
-		new_entries="\"$i\""
-	else
-	    	new_entries=$new_entries", \"$i\""
+	if [ -z "$new_entries" ]; then
+        new_entries="\"$i\""
+    else
+        new_entries=$new_entries", \"$i\""
 	fi
 done
 
-if [ -z $cur_entries ]; then
+if [ -z "$cur_entries" ]; then
 	sed -i 's|'"$key"': \[|&'"$new_entries"'|' $post
 else
 	sed -i 's|'"$cur_entries"'|'"$new_entries"'|' $post

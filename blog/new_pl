@@ -32,7 +32,7 @@ if [ ! -z $pl_name ]; then
 	pl_link=$(cat $blogPATH/static/playlists/$pl_name/pl.link)
 	sed -i 's,link: ",&'"$pl_link"',' $pl_post
 	sed -i 's,linktype: ",&'"$pl_type"',' $pl_post
-	add_list $pl_post categories music
+	add_list $pl_post categories music playlist
 	echo "tracklist:   " >> $pl_post
 	cat $blogPATH/static/playlists/$pl_name/tracks.lst >> $pl_post
 else
