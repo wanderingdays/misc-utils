@@ -1,4 +1,6 @@
 # misc-utils
+- spotify/get-all-playlists.sh:
+  gets all public playlists owned by user. Output file is stored in json for easy parsing using jq.
 - spotify/get-spotify-playlist.sh:    
   Gets playlist and playlist's image, both are saved under the provided directory. 
   To get playlist's URI, go to spotify and right click the PUBLIC playlist to share. 

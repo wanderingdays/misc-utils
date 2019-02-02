@@ -16,7 +16,7 @@ trap __cleanup EXIT
 # static/playlists/complete_lists
 
 usage() {
-    echo "get-all-playlists.sh <output_filename>"
+    echo "get-all-playlists.sh <spotify_username> <output_filename>"
     exit 1
 }
 
@@ -33,11 +33,12 @@ get_new_token() {
 	echo $token > $token_file
 }
 
-if [ $# -ne 1 ]; then
+if [ $# -ne 2 ]; then
     usage
 fi
 
-pl_json=$1
+spotify_user=$1
+pl_json=$2
 spotify_util_dir=$(dirname "$(which $0)")
 cred_file="$spotify_util_dir/credential.json"
 token_file="$spotify_util_dir/spotify_token"
@@ -83,7 +84,7 @@ get_all_playlists() {
 
 # get first lists
 pls_count=0
-req="https://api.spotify.com/v1/users/wanderingdays/playlists"
+req="https://api.spotify.com/v1/users/$spotify_user/playlists"
 
 while [ ! -z "$req" -a "$req" != "null" ]; do
 	get_all_playlists $pls_count -X GET -H "Authorization: Bearer $token" $req
@@ -98,7 +99,7 @@ while [ -e $pls_base$i ]; do
     pls_detail=$(cat $pls_base$i)
     jq -r '.items|keys[]' <<< "$pls_detail" | (while read pl_idx; do
         pl_owner=$(jq -r ".items[$pl_idx].owner.display_name" <<< "$pls_detail")
-        if [ "$pl_owner" = "wanderingdays" ]; then
+        if [ "$pl_owner" = "$spotify_user" ]; then
             pl_id=$(jq -r ".items[$pl_idx].id" <<< "$pls_detail")
             pl_name=$(jq -r ".items[$pl_idx].name" <<< "$pls_detail")
             pl_ver=$(jq -r ".items[$pl_idx].snapshot_id" <<< "$pls_detail")
