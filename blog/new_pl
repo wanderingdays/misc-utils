@@ -1,0 +1,36 @@
+#!/bin/sh
+
+set -e
+
+usage() {
+    echo "newpost <path to blog> <spotify playlist URI>"
+    exit 1 
+}
+
+if [ $# -ne 2 ]; then
+    usage
+fi
+
+blogPATH=$1
+uri=$2
+cd $blogPATH
+
+pl_name=$(get-spotify-playlist.sh $blogPATH $uri)
+if [ $? -ne 0 -o -z $pl_name ]; then
+	echo "get-spotify-playlist.sh failed"
+	exit 1
+fi
+
+pl_img="playlists/$pl_name/cover.jpg"
+
+if [ ! -z $pl_name ]; then
+	hugo new "posts"/$pl_name.md >/dev/null 2>&1 
+	sed -i 's/image: "/&cover.jpg/' $blogPATH/content/posts/$pl_name.md
+	sed -i 's/posttype: "/&playlists/' $blogPATH/content/posts/$pl_name.md
+	# link
+	# linktype
+	sed -i 's/tags: "/&LearningCurve/' $blogPATH/content/posts/$pl_name.md
+	cat $blogPATH/static/playlists/$pl_name/tracks.lst >> $blogPATH/content/posts/$pl_name.md
+else
+	echo "failed getting spotify playlist"
+fi

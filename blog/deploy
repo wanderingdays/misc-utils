@@ -15,7 +15,7 @@ blogPATH=$1
 cd $blogPATH
 hugo
 
-gsutil -m rsync -R public gs://blog.wanderingdays.com/
+gsutil -m rsync -R public gs://wanderingdays.com/
 
 echo Deployment completed!
 

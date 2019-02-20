@@ -2,38 +2,129 @@
 
 set -e
 
+__cleanup()
+{
+    ARG=$?
+#    echo "clean up tmp files"
+    rm -f /tmp/resp_body
+    if [ $ARG -ne 0 ]; then
+	    if [ ! -z $pl_path ]; then
+		    if [[ $pl_path == $path/static/playlists* ]]; then
+			    echo "cleanup playlist directory $pl_path"
+			    rm -rf $pl_path 
+		    else
+			    echo "playlist directory $pl_path looks fishy, remove it manually!"
+		    fi
+	    fi
+    fi
+    exit $ARG
+}
+trap __cleanup EXIT
+
+# when successful the following directory and files will be created under <playlist_path>
+# static/playlists/pl_name --- pl.ver           # playlist snapshot_id aka playlist version
+#                          --- pl.link          # external URL to the playlist
+#                          --- cover.jps        # cover image of the playlist 
+#                          --- tracks.lst       # tracklist 
+
 usage() {
     echo "get-spotify-playlist.sh <playlist_path> <spotify_uri>"
     exit 1 
+}
+
+get_cred() {
+	client_id=$(cat $1 |jq -r '.client_id')
+	client_secret=$(cat $1 |jq -r '.client_secret')
+	cred=$(echo -n "$client_id:$client_secret" | base64 -w 0)
+}
+
+get_new_token() {
+	rm -f $token_file
+	get_cred $cred_file
+	token=$(curl -s -X "POST" -H "Authorization: Basic $cred" -H "Accept: application/json" -d "grant_type=client_credentials" "https://accounts.spotify.com/api/token" 2>/dev/null | jq -r '.access_token')
+	echo $token > $token_file
 }
 
 if [ $# -ne 2 ]; then
     usage
 fi
 
-path=$1
+path=${1%/}
 pl_id=${2##*:}
+spotify_util_dir=$(dirname "$(which $0)")
+cred_file="$spotify_util_dir/credential.json"
+token_file="$spotify_util_dir/spotify_token"
 
-cred_file="credential.json"
-client_id=$(cat $cred_file |jq -r '.client_id')
-client_secret=$(cat $cred_file |jq -r '.client_secret')
-cred=$(echo -n "$client_id:$client_secret" | base64 -w 0)
-token=$(curl -s -X "POST" -H "Authorization: Basic $cred" -H "Accept: application/json" -d "grant_type=client_credentials" "https://accounts.spotify.com/api/token" 2>/dev/null | jq -r '.access_token')
-
-full=$(curl -H "Authorization: Bearer $token" https://api.spotify.com/v1/playlists/$pl_id)
-pl_url=$(echo $full | jq -r '.external_urls.spotify')
-pl_name=$(echo $full | jq -r '.name')
-pl_img=$(echo $full | jq -r '.images[0].url')
-
-mkdir -p $path/$pl_name
-
-if [ -e $path/$pl_name/tracks.lst ]; then 
-    echo "clean up exisitng files under $path/$pl_name/"
-    rm -f $path/$pl_name/*
+# 1.prepare token 
+#TODO: check out how to do refresh token, before that, we renew token if it is > 10mins
+if [ -e $token_file ]; then
+	toke_age=$((($(date +%s) - $(date -r ~/misc-utils/spotify/spotify_token +%s))))
+	if [ $toke_age -le 10 ]; then
+#		echo "get token from file"
+		token=$(cat $token_file)
+	else
+#		echo "token too old, get a new one"
+		get_new_token
+	fi
+else
+#	echo "get new token"
+	get_new_token
 fi
 
-jq -r '.tracks.items|keys[]' <<< "$full" | while read track_idx; do
-    track=$(jq -r ".tracks.items[$track_idx].track" <<< "$full")
+if [ -z $token ]; then
+	echo "not able to retrieve token"
+	rm -f $token_file
+	exit 1
+fi
+
+get_playlist_detail() {
+    rc=0
+    status=$(curl -w "%{http_code}" \
+        -o >(cat >/tmp/resp_body) \
+        "$@"
+    ) || rc="$?"
+
+    if [ $status -ne 200 -o $rc -ne 0 ]; then
+	    echo "get playlist detail failed status: $status rc: $rc"
+	    exit 1
+    fi
+    pl_detail="$(cat /tmp/resp_body)"
+}
+
+# 2. get playlist detail
+get_playlist_detail -H "Authorization: Bearer $token" https://api.spotify.com/v1/playlists/$pl_id
+pl_url=$(echo $pl_detail| jq -r '.external_urls.spotify')
+pl_name=$(echo $pl_detail| jq -r '.name')
+pl_img=$(echo $pl_detail| jq -r '.images[0].url')
+pl_snapshot=$(echo $pl_detail| jq -r '.snapshot_id')
+
+echo $pl_snapshot
+
+# 3. check if the playlist is already downloaded and version is the same
+pl_path=$path/"static/playlists"/$pl_name
+mkdir -p $pl_path
+if [ -e $pl_path/pl.ver ]; then
+	old_pl_snapshot=$(cat $pl_path/pl.ver)
+	if [ "$pl_snapshot" == "$old_pl_snapshot" ]; then
+		echo "playlist $pl_name avail at local"
+		exit 0
+	fi
+fi
+
+# 4. update playlist snapshot id aka version
+echo $pl_snapshot > $pl_path/pl.ver
+
+# 5. cleanup old playlist data
+echo "clean up exisitng files under $pl_path"
+rm -f $pl_path/tracks.lst
+rm -f $pl_path/pl.link
+rm -f $pl_path/cover.jpg
+
+echo "${pl_url}" > $pl_path/pl.link
+curl -o $pl_path/cover.jpg $pl_img
+
+jq -r '.tracks.items|keys[]' <<< "$pl_detail" | while read track_idx; do
+    track=$(jq -r ".tracks.items[$track_idx].track" <<< "$pl_detail")
     track_title=$(jq -r '.name' <<< "$track")
     artists=""
     jq -r '.artists|keys[]' <<< "$track" | (while read artist_idx; do
@@ -43,7 +134,7 @@ jq -r '.tracks.items|keys[]' <<< "$full" | while read track_idx; do
              artists="$artists, $(jq -r ".artists[$artist_idx].name" <<< "$track")"
 	 fi
     done
-    printf "%02d. %s - %s\n" "$((track_idx+1))" "$artists" "$track_title" >> $path/$pl_name/tracks.lst)
+    printf "%02d. %s - %s   \n" "$((track_idx+1))" "$artists" "$track_title" >> $pl_path/tracks.lst)
 done
 
-curl -o $path/$pl_name/cover.jpg $pl_img
+echo $pl_name
