@@ -19,12 +19,21 @@ if [ ! -e $post ]; then
 	exit 1
 fi
 
+cur_entries=$(cat $post |grep $key)
+cur_entries=$"{cur_entries#*[}"
+cur_entries=$"{cur_entries%]*}"
+new_entries=$cur_entries
 for i in "$@"; do
-	if [ -z $tags ]; then
-		tags="\"$i\""
+	echo $new_entries
+	if [ -z $new_entries ]; then
+		new_entries="\"$i\""
 	else
-	    	tags=$tags", \"$i\""
+	    	new_entries=$new_entries", \"$i\""
 	fi
 done
 
-sed -i 's|'"$key"': \[|&'"$tags"'|' $post
+if [ -z $cur_entries ]; then
+	sed -i 's|'"$key"': \[|&'"$new_entries"'|' $post
+else
+	sed -i 's|'"$cur_entries"'|'"$new_entries"'|' $post
+fi
