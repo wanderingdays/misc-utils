@@ -79,7 +79,7 @@ fi
 
 get_playlist_detail() {
     rc=0
-    status=$(curl -w "%{http_code}" \
+    status=$(curl -s -w "%{http_code}" \
         -o >(cat >/tmp/resp_body) \
         "$@"
     ) || rc="$?"
@@ -98,43 +98,51 @@ pl_name=$(echo $pl_detail| jq -r '.name')
 pl_img=$(echo $pl_detail| jq -r '.images[0].url')
 pl_snapshot=$(echo $pl_detail| jq -r '.snapshot_id')
 
-echo $pl_snapshot
-
 # 3. check if the playlist is already downloaded and version is the same
 pl_path=$path/"static/playlists"/$pl_name
 mkdir -p $pl_path
 if [ -e $pl_path/pl.ver ]; then
 	old_pl_snapshot=$(cat $pl_path/pl.ver)
 	if [ "$pl_snapshot" == "$old_pl_snapshot" ]; then
-		echo "playlist $pl_name avail at local"
-		exit 0
+		pl_update=0
+	else
+		pl_update=1
 	fi
+else
+	pl_update=1
 fi
 
-# 4. update playlist snapshot id aka version
-echo $pl_snapshot > $pl_path/pl.ver
+# 4. cleanup playlist if update is required
+if [ $pl_update -eq 1 ]; then
+	echo $pl_snapshot > $pl_path/pl.ver
+	rm -f $pl_path/tracks.lst
+	rm -f $pl_path/pl.link
+	rm -f $pl_path/cover.jpg
+fi
 
-# 5. cleanup old playlist data
-echo "clean up exisitng files under $pl_path"
-rm -f $pl_path/tracks.lst
-rm -f $pl_path/pl.link
-rm -f $pl_path/cover.jpg
+# 5. fetch playlist data if missing
+if [ ! -e $pl_path/pl.link ]; then
+	echo "${pl_url}" > $pl_path/pl.link
+fi
 
-echo "${pl_url}" > $pl_path/pl.link
-curl -o $pl_path/cover.jpg $pl_img
+if [ ! -e $pl_path/cover.jpg ]; then
+	curl -s -o $pl_path/cover.jpg $pl_img
+fi
 
-jq -r '.tracks.items|keys[]' <<< "$pl_detail" | while read track_idx; do
-    track=$(jq -r ".tracks.items[$track_idx].track" <<< "$pl_detail")
-    track_title=$(jq -r '.name' <<< "$track")
-    artists=""
-    jq -r '.artists|keys[]' <<< "$track" | (while read artist_idx; do
-	 if [ -z "$artists" ]; then
-             artists="$(jq -r ".artists[$artist_idx].name" <<< "$track")"
-         else
-             artists="$artists, $(jq -r ".artists[$artist_idx].name" <<< "$track")"
-	 fi
-    done
-    printf "%02d. %s - %s   \n" "$((track_idx+1))" "$artists" "$track_title" >> $pl_path/tracks.lst)
-done
+if [ ! -e $pl_path/tracks.lst ]; then
+	jq -r '.tracks.items|keys[]' <<< "$pl_detail" | while read track_idx; do
+    		track=$(jq -r ".tracks.items[$track_idx].track" <<< "$pl_detail")
+		track_title=$(jq -r '.name' <<< "$track")
+    		artists=""
+		jq -r '.artists|keys[]' <<< "$track" | (while read artist_idx; do
+			if [ -z "$artists" ]; then
+	   			artists="$(jq -r ".artists[$artist_idx].name" <<< "$track")"
+	       		else
+		   		artists="$artists, $(jq -r ".artists[$artist_idx].name" <<< "$track")"
+       			fi
+	    	done
+		printf "%02d. %s - %s   \n" "$((track_idx+1))" "$artists" "$track_title" >> $pl_path/tracks.lst)
+	done
+fi
 
 echo $pl_name

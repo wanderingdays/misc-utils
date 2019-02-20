@@ -3,16 +3,18 @@
 set -e
 
 usage() {
-    echo "newpost <path to blog> <spotify playlist URI>"
+    echo "newpost <path to blog> <playlist_type> <playlist URI>"
     exit 1 
 }
 
-if [ $# -ne 2 ]; then
+if [ $# -ne 3 ]; then
     usage
 fi
 
 blogPATH=$1
-uri=$2
+postPATH="$blogPATH/content/posts"
+pl_type=$2
+uri=$3
 cd $blogPATH
 
 pl_name=$(get-spotify-playlist.sh $blogPATH $uri)
@@ -22,15 +24,17 @@ if [ $? -ne 0 -o -z $pl_name ]; then
 fi
 
 pl_img="playlists/$pl_name/cover.jpg"
+pl_post="$postPATH/$pl_name.md"
 
 if [ ! -z $pl_name ]; then
 	hugo new "posts"/$pl_name.md >/dev/null 2>&1 
-	sed -i 's/image: "/&cover.jpg/' $blogPATH/content/posts/$pl_name.md
-	sed -i 's/posttype: "/&playlists/' $blogPATH/content/posts/$pl_name.md
-	# link
-	# linktype
-	sed -i 's/tags: "/&LearningCurve/' $blogPATH/content/posts/$pl_name.md
-	cat $blogPATH/static/playlists/$pl_name/tracks.lst >> $blogPATH/content/posts/$pl_name.md
+	sed -i 's/image: "/&cover.jpg/' $pl_post
+	pl_link=$(cat $blogPATH/static/playlists/$pl_name/pl.link)
+	sed -i 's,link: ",&'"$pl_link"',' $pl_post
+	sed -i 's,linktype: ",&'"$pl_type"',' $pl_post
+	add_list $pl_post categories music
+	echo "tracklist:   " >> $pl_post
+	cat $blogPATH/static/playlists/$pl_name/tracks.lst >> $pl_post
 else
 	echo "failed getting spotify playlist"
 fi

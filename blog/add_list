@@ -1,0 +1,30 @@
+#!/bin/sh
+
+set -e
+
+usage() {
+    echo "add_tags <path to post> <key> <tag1> [tag2]..."
+    exit 1 
+}
+
+if [ $# -le 2 ]; then
+    usage
+fi
+
+post=$1
+key=$2
+shift 2
+if [ ! -e $post ]; then
+	echo "post $post does not exists"
+	exit 1
+fi
+
+for i in "$@"; do
+	if [ -z $tags ]; then
+		tags="\"$i\""
+	else
+	    	tags=$tags", \"$i\""
+	fi
+done
+
+sed -i 's|'"$key"': \[|&'"$tags"'|' $post
