@@ -3,7 +3,7 @@
 set -e
 
 usage() {
-    echo "newpost <path to blog> <playlist_type> <username> <playlist name>"
+    echo "new_pl <path to blog> <playlist_type> <username> <playlist name>"
     exit 1 
 }
 

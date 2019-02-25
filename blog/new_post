@@ -1,0 +1,36 @@
+#!/bin/sh
+
+set -e
+
+usage() {
+    echo "new_post <path to blog> <title> [link] [linktype]" 
+    exit 1 
+}
+
+if [ $# -lt 2 -o $# -gt 4 ]; then
+    usage
+fi
+
+blogPATH=$1
+postPATH="$blogPATH/content/posts"
+p_title=$2
+p_tmp=$(echo $p_title | tr -d ' ' | tr - _)
+p_fname=$p_tmp.md
+
+if [ ! -z $3 ]; then
+	p_link=$3
+fi
+if [ ! -z $4 ]; then
+	p_linktype=$4
+fi
+
+echo $p_title $p_link $p_linktype
+echo $p_fname
+cd $blogPATH
+
+p_post="$postPATH/$p_fname"
+
+hugo new "posts"/$p_fname >/dev/null 2>&1 
+sed -i 's,'"$p_tmp"','"$p_title"',' $p_post
+sed -i 's,link: ",&'"$p_link"',' $p_post
+sed -i 's,linktype: ",&'"$p_linktype"',' $p_post
