@@ -103,7 +103,7 @@ pl_img=$(echo $pl_detail| jq -r '.images[0].url')
 pl_snapshot=$(echo $pl_detail| jq -r '.snapshot_id')
 
 # 3. check if the playlist is already downloaded and version is the same
-pl_path=$path/"static/playlists"/$pl_name
+pl_path=$path/"static/playlists"/${pl_name,,}
 mkdir -p $pl_path
 if [ -e $pl_path/pl.ver ]; then
 	old_pl_snapshot=$(cat $pl_path/pl.ver)
